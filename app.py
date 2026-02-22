@@ -1,6 +1,6 @@
 # app.py — Metal Débit Web (version “niveau .exe”)
 # Dépendances: streamlit, openpyxl, reportlab
-# Recommandé sur Streamlit Cloud: ajoute runtime.txt => python-3.11
+# Recommandé Streamlit Cloud: runtime.txt => python-3.11
 
 from __future__ import annotations
 
@@ -30,8 +30,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 # =========================
 st.set_page_config(page_title="Metal Débit", page_icon="🧰", layout="wide")
 
-# ⚠️ Change ton mot de passe ici (ou via st.secrets)
-PASSWORD = "metaldebit123"
+PASSWORD = "metaldebit123"  # change ici
 
 
 def gate_password() -> None:
@@ -43,11 +42,11 @@ def gate_password() -> None:
 
     st.title("🔒 Accès sécurisé — Metal Débit")
     st.caption("Entrez le mot de passe pour accéder à l’application.")
-    pwd = st.text_input("Mot de passe", type="password")
+    pwd = st.text_input("Mot de passe", type="password", key="pwd_gate")
 
     c1, c2 = st.columns([1, 2])
     with c1:
-        if st.button("Connexion", use_container_width=True):
+        if st.button("Connexion", use_container_width=True, key="btn_login"):
             if pwd == PASSWORD:
                 st.session_state.auth_ok = True
                 st.rerun()
@@ -164,6 +163,7 @@ def pack_into_stock_then_bars(
             if leftover > 0:
                 new_stock.append(leftover)
 
+    # reste => barres neuves
     bars.extend(pack_first_fit(remaining, bar_length, kerf))
 
     bars = sorted(bars, key=lambda b: b.leftover)
@@ -188,14 +188,11 @@ def score_solution(
         return nb_new_bars * 1e12 + total_waste * 1e3 + mid_penalty * 10 - max_leftover
 
     if strategy == "max_grosse_chute":
-        # favorise une grosse chute réutilisable (ex: 4310) plutôt que 470/540
         return nb_new_bars * 1e12 + total_waste * 1e3 + mid_penalty * 70 - (max_leftover * 1e5)
 
     if strategy == "zero_micro":
-        # punit fortement les chutes "moyennes"
         return nb_new_bars * 1e12 + total_waste * 1e3 + mid_penalty * 250 - max_leftover
 
-    # equilibre
     return nb_new_bars * 1e12 + total_waste * 1e3 + mid_penalty * 90 - max_leftover
 
 
@@ -218,11 +215,9 @@ def optimize_profile(
 
     rng = random.Random(seed)
 
-    # Itérations = nombre d'essais (échanges aléatoires)
     for _ in range(max(1, iterations)):
         if len(current) < 2:
             break
-
         new_order = current[:]
         i = rng.randrange(len(new_order))
         j = rng.randrange(len(new_order))
@@ -478,10 +473,8 @@ def export_pdf_atelier_no_price(
             ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
             ("FONTSIZE", (0, 0), (-1, 0), 10),
             ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-
             ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#888888")),
             ("FONTSIZE", (0, 1), (-1, -1), 9),
-
             ("ALIGN", (0, 1), (0, -1), "CENTER"),
             ("ALIGN", (1, 1), (3, -1), "CENTER"),
             ("ALIGN", (5, 1), (5, -1), "CENTER"),
@@ -499,53 +492,40 @@ def export_pdf_atelier_no_price(
 # STATE INIT
 # =========================
 def init_state() -> None:
-    if "project_name" not in st.session_state:
-        st.session_state.project_name = "Projet"
-    if "client_name" not in st.session_state:
-        st.session_state.client_name = "Client"
-    if "project_date" not in st.session_state:
-        st.session_state.project_date = str(date.today())
+    st.session_state.setdefault("project_name", "Projet")
+    st.session_state.setdefault("client_name", "Client")
+    st.session_state.setdefault("project_date", str(date.today()))
 
-    if "kerf_mm" not in st.session_state:
-        st.session_state.kerf_mm = 0
-    if "iterations" not in st.session_state:
-        st.session_state.iterations = 30000
-    if "scrap_max_mm" not in st.session_state:
-        st.session_state.scrap_max_mm = 100
-    if "reusable_min_mm" not in st.session_state:
-        st.session_state.reusable_min_mm = 1500
-    if "strategy" not in st.session_state:
-        st.session_state.strategy = "equilibre"
+    st.session_state.setdefault("kerf_mm", 0)
+    st.session_state.setdefault("iterations", 30000)
+    st.session_state.setdefault("scrap_max_mm", 100)
+    st.session_state.setdefault("reusable_min_mm", 1500)
+    st.session_state.setdefault("strategy", "equilibre")
 
-    if "profiles" not in st.session_state:
-        st.session_state.profiles = {}  # name -> Profile
-    if "profile_rows" not in st.session_state:
-        st.session_state.profile_rows = {}  # name -> list[dict] (10 lignes)
-    if "profile_stock" not in st.session_state:
-        st.session_state.profile_stock = {}  # name -> "4310,2500"
+    st.session_state.setdefault("profiles", {})          # name -> Profile
+    st.session_state.setdefault("profile_rows", {})      # name -> list[dict] (10 lignes)
+    st.session_state.setdefault("profile_stock", {})     # name -> "4310,2500"
 
-    if "results" not in st.session_state:
-        st.session_state.results = {}  # name -> list[Bar]
-    if "stock_after" not in st.session_state:
-        st.session_state.stock_after = {}  # name -> list[int]
+    st.session_state.setdefault("results", {})           # name -> list[Bar]
+    st.session_state.setdefault("stock_after", {})       # name -> list[int]
 
 
 init_state()
 
 
 # =========================
-# UI — HEADER
+# UI — HEADER (sans conflit session_state)
 # =========================
 st.title("🧰 Metal Débit — Web (complet)")
 st.caption("Multi-profils • 10 lignes ergonomiques • Stock chutes • Stratégies • Excel (prix) + PDF atelier (sans prix)")
 
 h1, h2, h3, h4 = st.columns([2, 2, 1.2, 1.2])
 with h1:
-    st.session_state.project_name = st.text_input("Nom du projet", value=st.session_state.project_name, key="proj_name")
+    st.text_input("Nom du projet", key="project_name")
 with h2:
-    st.session_state.client_name = st.text_input("Client", value=st.session_state.client_name, key="client_name")
+    st.text_input("Client", key="client_name")
 with h3:
-    st.session_state.project_date = st.text_input("Date", value=st.session_state.project_date, key="proj_date")
+    st.text_input("Date", key="project_date")
 with h4:
     if st.button("🧹 Reset résultats", use_container_width=True, key="reset_results"):
         st.session_state.results = {}
@@ -562,22 +542,20 @@ left, right = st.columns([1.05, 1.55], gap="large")
 with left:
     st.subheader("Paramètres atelier (globaux)")
 
-    st.session_state.kerf_mm = st.number_input("Trait de scie (mm)", min_value=0, value=int(st.session_state.kerf_mm), step=1, key="kerf")
-    st.session_state.iterations = st.number_input(
+    st.number_input("Trait de scie (mm)", min_value=0, step=1, key="kerf_mm")
+    st.number_input(
         "Itérations",
         min_value=0,
-        value=int(st.session_state.iterations),
         step=1000,
-        key="iters",
+        key="iterations",
         help="Plus c'est haut, plus l'optimisation cherche une meilleure combinaison (mais c'est plus lent)."
     )
-    st.session_state.scrap_max_mm = st.number_input("Chute poubelle ≤ (mm)", min_value=0, value=int(st.session_state.scrap_max_mm), step=10, key="scrapmax")
-    st.session_state.reusable_min_mm = st.number_input("Chute réutilisable ≥ (mm)", min_value=0, value=int(st.session_state.reusable_min_mm), step=50, key="reusemin")
+    st.number_input("Chute poubelle ≤ (mm)", min_value=0, step=10, key="scrap_max_mm")
+    st.number_input("Chute réutilisable ≥ (mm)", min_value=0, step=50, key="reusable_min_mm")
 
-    st.session_state.strategy = st.selectbox(
+    st.selectbox(
         "Stratégie",
         ["equilibre", "min_barres", "max_grosse_chute", "zero_micro"],
-        index=["equilibre", "min_barres", "max_grosse_chute", "zero_micro"].index(st.session_state.strategy),
         key="strategy",
         help=(
             "equilibre: bon compromis\n"
@@ -587,7 +565,7 @@ with left:
         )
     )
 
-    if st.session_state.reusable_min_mm <= st.session_state.scrap_max_mm:
+    if int(st.session_state.reusable_min_mm) <= int(st.session_state.scrap_max_mm):
         st.warning("Conseil: mets 'réutilisable' > 'poubelle' (ex: poubelle=100, réutilisable=1500).")
 
     st.divider()
@@ -666,7 +644,6 @@ st.divider()
 # ACTIONS — CALCUL + EXPORT
 # =========================
 a1, a2, a3, a4 = st.columns([1.2, 1.2, 1.2, 1.2])
-
 with a1:
     do_calc = st.button("🧮 Calculer tout", use_container_width=True, key="calc_all")
 with a2:
@@ -764,15 +741,12 @@ if results:
     t2.metric("TOTAL HT (Excel)", f"{total_ht:.2f} €")
     t3.metric("Stratégie", st.session_state.strategy)
 
-    # =========================
-    # EXPORT BUTTONS
-    # =========================
     st.subheader("Exports")
 
     excel_bytes = export_excel_like_table(
-        project_name=st.session_state.project_name,
-        client=st.session_state.client_name,
-        created=st.session_state.project_date,
+        project_name=str(st.session_state.project_name),
+        client=str(st.session_state.client_name),
+        created=str(st.session_state.project_date),
         kerf=int(st.session_state.kerf_mm),
         strategy=str(st.session_state.strategy),
         profiles=st.session_state.profiles,
@@ -781,9 +755,9 @@ if results:
     )
 
     pdf_bytes = export_pdf_atelier_no_price(
-        project_name=st.session_state.project_name,
-        client=st.session_state.client_name,
-        created=st.session_state.project_date,
+        project_name=str(st.session_state.project_name),
+        client=str(st.session_state.client_name),
+        created=str(st.session_state.project_date),
         kerf=int(st.session_state.kerf_mm),
         strategy=str(st.session_state.strategy),
         profiles=st.session_state.profiles,
@@ -809,6 +783,5 @@ if results:
             mime="application/pdf",
             use_container_width=True
         )
-
 else:
     st.info("Renseigne tes profils et pièces, puis clique **Calculer tout**.")
